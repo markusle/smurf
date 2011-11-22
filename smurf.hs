@@ -37,7 +37,9 @@ import Text.Printf (printf)
 import Word (Word8)
 import Debug.Trace
 
-data FileEntry = FileEntry { name :: String
+
+-- | data structure to keep track of files
+data FileEntry = FileEntry { path :: String
                            , uid  :: Int 
                            , gid  :: Int
                            , mode :: FileMode
@@ -51,7 +53,6 @@ data FileEntry = FileEntry { name :: String
 
 startPath = "/"
 
---main :: IO [FileEntry]
 main = 
   get_id_name_map "/etc/passwd"
   >>= \uidMap -> get_id_name_map "/etc/group"
@@ -152,7 +153,7 @@ generate_entry uidMap gidMap entry =
     uname   = (!) uidMap (uid entry)
     gname   = (!) gidMap (gid entry)
   in
-   printf "%s   %-6s %-6s %s\n" perms uname gname (name entry)
+   printf "%s   %-6s %-6s %s\n" perms uname gname (path entry)
    
 
   where
