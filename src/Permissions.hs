@@ -18,7 +18,11 @@
 
 --------------------------------------------------------------------}
 
-module Main where
+module Permissions ( FileEntry(..)
+                   , get_files_with_suspect_permissions 
+                   , get_id_name_map
+                   , generate_entry
+                   ) where
 
 import Char(ord)
 import Control.Monad (forM, liftM)
@@ -28,14 +32,14 @@ import qualified Data.ByteString.Lazy as B
 import qualified Data.ByteString.Lazy.Char8 as BC
 import Data.List (isPrefixOf)
 import Data.Map (Map, fromList, (!))
-import System.IO
 import System.Posix.Files
 import System.Posix.Types
-import System.Directory (doesDirectoryExist, getDirectoryContents)
+import System.Directory (getDirectoryContents)
 import System.FilePath ((</>))
 import Text.Printf (printf)
 import Word (Word8)
-import Debug.Trace
+--import Debug.Trace
+
 
 
 -- | data structure to keep track of files
@@ -51,39 +55,25 @@ data FileEntry = FileEntry { path :: String
                  deriving (Show)
 
 
-startPath = "/"
 
-main = 
-  get_id_name_map "/etc/passwd"
-  >>= \uidMap -> get_id_name_map "/etc/group"
-  >>= \gidMap -> walk_path startPath []
-  >>= \entries -> 
-  putStrLn "\nFiles with set UID:"
-  >> putStrLn "----------------------------------------"
-  >> mapM (generate_entry uidMap gidMap) (filter isSuid entries)
-  >> putStrLn "\n\nFiles with set GID:"
-  >> putStrLn "----------------------------------------"
-  >> mapM (generate_entry uidMap gidMap) (filter isSgid entries)
-  >> putStrLn "\n\nFiles that are group writable"
-  >> putStrLn "----------------------------------------"
-  >> mapM (generate_entry uidMap gidMap) (filter isGroupWrite entries)
-  >> putStrLn "\n\nFiles that are world writable"
-  >> putStrLn "----------------------------------------"
-  >> mapM (generate_entry uidMap gidMap) (filter isWorldWrite entries)           
+-- | top level wrapper for permission checking functionality
+get_files_with_suspect_permissions :: FilePath -> IO [FileEntry]
+get_files_with_suspect_permissions rootPath = walk_path rootPath [] 
 
-       
-                     
+
+  
+-- | recursively walk down the file tree starting at root
 walk_path :: FilePath -> [FileEntry] -> IO [FileEntry]
-walk_path path acc =
+walk_path rootPath acc =
   (try :: IO [FilePath] -> IO (Either SomeException [FilePath])) 
-  (getDirectoryContents path)
+  (getDirectoryContents rootPath)
   >>= \result -> 
   case result of
     Left _        -> return acc
     Right content ->
       let filteredContent = filter (`notElem` [".", ".."]) content in
       liftM concat $ forM filteredContent $
-      \name -> let newPath = path </> name in 
+      \name -> let newPath = rootPath </> name in 
       (try :: IO FileStatus -> IO (Either SomeException FileStatus))
       (getSymbolicLinkStatus newPath)
       >>= \status ->
@@ -103,21 +93,25 @@ walk_path path acc =
               then walk_path newPath acc
               else 
                 (get_file_mode newPath)
-                >>= \content -> 
-                let entry = (uncurry get_file_entry $ content) in
+                >>= \theFileMode -> 
+                let entry = (uncurry get_file_entry $ theFileMode) in
                 if (isSuid entry || isSgid entry || isWorldWrite entry 
                     || isGroupWrite entry)
                    then return [entry]
                    else return []
-                           
+                          
 
 
+-- | checks if path is part of /sys
 is_sys_entry :: FilePath -> Bool
 is_sys_entry = isPrefixOf "/sys/"
 
 
+
+-- | checks if path is part of /proc
 is_proc_entry :: FilePath -> Bool
 is_proc_entry = isPrefixOf "/proc/"
+
 
 
 get_file_mode :: FilePath -> IO (FilePath, FileStatus)
@@ -126,19 +120,21 @@ get_file_mode name =
   >>= \status -> return (name, status)
 
 
+
 get_file_entry :: FilePath -> FileStatus -> FileEntry
 get_file_entry name status = 
   let 
-    mode       = fileMode status 
-    worldWrite = (mode .&. otherWriteMode) /= 0
-    groupWrite = (mode .&. groupWriteMode) /= 0
-    suid       = (mode .&. setUserIDMode) /= 0
-    sgid       = (mode .&. setGroupIDMode) /= 0
-    uid        = fromIntegral $ fileOwner status
-    gid        = fromIntegral $ fileGroup status
+    theMode    = fileMode status 
+    worldWrite = (theMode .&. otherWriteMode) /= 0
+    groupWrite = (theMode .&. groupWriteMode) /= 0
+    suid       = (theMode .&. setUserIDMode) /= 0
+    sgid       = (theMode .&. setGroupIDMode) /= 0
+    theUid     = fromIntegral $ fileOwner status
+    theGid     = fromIntegral $ fileGroup status
   in
-   FileEntry name uid gid mode suid sgid worldWrite groupWrite
+   FileEntry name theUid theGid theMode suid sgid worldWrite groupWrite
    
+
    
 -- | generate a pretty printed line of output for each entry 
 generate_entry :: Map Int String -> Map Int String -> FileEntry -> IO ()
@@ -192,10 +188,10 @@ get_id_name_map idFile =
   where
     grab_id_name entry = 
       let items = B.split colon entry 
-          id    = read . BC.unpack $ items !! 2 :: Int
+          theId = read . BC.unpack $ items !! 2 :: Int
           name  = BC.unpack $ head items
       in
-      (id, name)
+      (theId, name)
       
       
       
@@ -203,11 +199,13 @@ get_id_name_map idFile =
 char_to_Word8 :: Char -> Word8
 char_to_Word8 = fromIntegral . ord
 
+
       
 -- | end of line character      
 eol :: Word8
 eol = char_to_Word8 '\n'
       
+
 
 -- | colon character
 colon :: Word8
