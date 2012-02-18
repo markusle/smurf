@@ -24,8 +24,7 @@ module Permissions ( FileEntry(..)
                    , generate_entry
                    ) where
 
-import Char(ord)
-import Control.Monad (forM, liftM)
+import Data.Char(ord)
 import Control.Exception (try, SomeException)
 import Data.Bits
 import qualified Data.ByteString.Lazy as B
@@ -37,8 +36,9 @@ import System.Posix.Types
 import System.Directory (getDirectoryContents)
 import System.FilePath ((</>))
 import Text.Printf (printf)
-import Word (Word8)
---import Debug.Trace
+import Data.Word (Word8)
+import Debug.Trace
+import Prelude
 
 
 
@@ -55,74 +55,65 @@ data FileEntry = FileEntry { path :: String
                  deriving (Show)
 
 
-
--- | top level wrapper for permission checking functionality
-get_files_with_suspect_permissions :: FilePath -> IO [FileEntry]
-get_files_with_suspect_permissions rootPath = walk_path rootPath [] 
-
-
-  
 -- | recursively walk down the file tree starting at root
-walk_path :: FilePath -> [FileEntry] -> IO [FileEntry]
-walk_path rootPath acc =
-  (try :: IO [FilePath] -> IO (Either SomeException [FilePath])) 
-  (getDirectoryContents rootPath)
-  >>= \result -> 
-  case result of
-    Left _        -> return acc
-    Right content ->
-      let filteredContent = filter (`notElem` [".", ".."]) content in
-      liftM concat $ forM filteredContent $
-      \name -> let newPath = rootPath </> name in 
-      (try :: IO FileStatus -> IO (Either SomeException FileStatus))
-      (getSymbolicLinkStatus newPath)
-      >>= \status ->
-      case status of
-        Left _  -> return acc
-        Right s -> if (isSymbolicLink s  
-                       || isCharacterDevice s 
-                       || isBlockDevice s
-                       || isSocket s
-                       || isNamedPipe s
-                       || is_sys_entry newPath
-                       || is_proc_entry newPath
-                      )
-         then return acc
-         else 
-           if isDirectory s
-              then walk_path newPath acc
-              else 
-                (get_file_mode newPath)
-                >>= \theFileMode -> 
-                let entry = (uncurry get_file_entry $ theFileMode) in
-                if (isSuid entry || isSgid entry || isWorldWrite entry 
-                    || isGroupWrite entry)
-                   then return [entry]
-                   else return []
-                          
+get_files_with_suspect_permissions :: FilePath -> IO [FileEntry]
+get_files_with_suspect_permissions rootPath =
+  walk_path [rootPath] []
+  
+
+-- | main path walking routine
+walk_path :: [FilePath] -> [FileEntry] -> IO [FileEntry]
+walk_path [] acc = return acc
+walk_path (thePath:xs) acc = 
+
+  -- we have to be careful since we might encouter files we can't
+  -- read for whatever reason (permissions, etc.)
+  (try :: IO FileStatus -> IO (Either SomeException FileStatus))
+  (getSymbolicLinkStatus thePath)
+  >>= \status ->
+  case status of
+    Left _ -> walk_path xs acc
+    Right s ->
+       if ((isRegularFile s) && (not_sys_entry thePath) && (not_proc_entry thePath))
+       then getFileStatus thePath 
+       >>= \status ->
+         case check_file_entry thePath status of
+            Just x -> walk_path xs (x:acc)
+            Nothing -> walk_path xs acc
+       else
+         if isDirectory s
+         then 
+            (try :: IO [FilePath] -> IO (Either SomeException [FilePath])) 
+            (getDirectoryContents thePath)
+            >>= \result -> 
+            case result of
+              Left _ -> walk_path xs acc
+              Right content ->
+                let filteredContent = filter (`notElem` [".", ".."]) content 
+                    newPaths        = map (\x -> thePath </> x) filteredContent
+                in
+                walk_path (newPaths ++ xs) acc
+         else
+           walk_path xs acc
+  
 
 
 -- | checks if path is part of /sys
-is_sys_entry :: FilePath -> Bool
-is_sys_entry = isPrefixOf "/sys/"
-
+not_sys_entry :: FilePath -> Bool
+not_sys_entry = not . isPrefixOf "/sys/"
+           
 
 
 -- | checks if path is part of /proc
-is_proc_entry :: FilePath -> Bool
-is_proc_entry = isPrefixOf "/proc/"
+not_proc_entry :: FilePath -> Bool
+not_proc_entry = not . isPrefixOf "/proc/"
+            
 
 
-
-get_file_mode :: FilePath -> IO (FilePath, FileStatus)
-get_file_mode name = 
-  getFileStatus name
-  >>= \status -> return (name, status)
-
-
-
-get_file_entry :: FilePath -> FileStatus -> FileEntry
-get_file_entry name status = 
+-- | pick out entries with properties we are looking
+-- for (suid, sgid, ....)
+check_file_entry :: FilePath -> FileStatus -> Maybe FileEntry
+check_file_entry name status = 
   let 
     theMode    = fileMode status 
     worldWrite = (theMode .&. otherWriteMode) /= 0
@@ -132,10 +123,12 @@ get_file_entry name status =
     theUid     = fromIntegral $ fileOwner status
     theGid     = fromIntegral $ fileGroup status
   in
-   FileEntry name theUid theGid theMode suid sgid worldWrite groupWrite
-   
+   if (suid || sgid || worldWrite || groupWrite)
+      then Just $ FileEntry name theUid theGid theMode suid sgid worldWrite groupWrite
+      else Nothing
+      
 
-   
+
 -- | generate a pretty printed line of output for each entry 
 generate_entry :: Map Int String -> Map Int String -> FileEntry -> IO ()
 generate_entry uidMap gidMap entry = 

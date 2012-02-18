@@ -27,8 +27,8 @@ module CommandLine ( process_commandline
 -- imports
 --import Data.Word
 import Prelude
-import System
 import System.Console.GetOpt
+import System.Exit
 
 import Messages (show_version
                 , usage
