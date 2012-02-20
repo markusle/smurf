@@ -55,6 +55,12 @@ data FileEntry = FileEntry { path :: String
                  deriving (Show)
 
 
+
+-- | data classifier for file entries
+data EntryType = File | Directory | None
+
+
+
 -- | recursively walk down the file tree starting at root
 get_files_with_suspect_permissions :: FilePath -> IO [FileEntry]
 get_files_with_suspect_permissions rootPath =
@@ -73,29 +79,42 @@ walk_path (thePath:xs) acc =
   >>= \status ->
   case status of
     Left _ -> walk_path xs acc
-    Right s ->
-       if ((isRegularFile s) && (not_sys_entry thePath) && (not_proc_entry thePath))
-       then getFileStatus thePath 
-       >>= \status ->
-         case check_file_entry thePath status of
-            Just x -> walk_path xs (x:acc)
-            Nothing -> walk_path xs acc
-       else
-         if isDirectory s
-         then 
-            (try :: IO [FilePath] -> IO (Either SomeException [FilePath])) 
-            (getDirectoryContents thePath)
-            >>= \result -> 
-            case result of
-              Left _ -> walk_path xs acc
-              Right content ->
-                let filteredContent = filter (`notElem` [".", ".."]) content 
-                    newPaths        = map (\x -> thePath </> x) filteredContent
-                in
-                walk_path (newPaths ++ xs) acc
-         else
-           walk_path xs acc
-  
+    Right s -> case get_entry_type s of
+       File      -> update_file_status 
+                    >>= \newAcc-> walk_path xs (newAcc ++ acc)
+       Directory -> update_paths 
+                    >>= \newPaths -> walk_path (newPaths ++ xs) acc
+       None      -> walk_path xs acc
+
+
+  where
+    update_file_status = getFileStatus thePath 
+      >>= \status -> 
+      case check_file_entry thePath status of
+        Just x -> return [x] 
+        Nothing -> return []
+
+
+    update_paths = 
+      (try :: IO [FilePath] -> IO (Either SomeException [FilePath])) 
+      (getDirectoryContents thePath)
+        >>= \result -> 
+        case result of
+          Left _ -> return [] 
+          Right content ->
+            let filteredContent = filter (`notElem` [".", ".."]) content 
+                newPaths        = map (\x -> thePath </> x) filteredContent
+            in
+            return newPaths
+
+
+    get_entry_type s 
+      | (isRegularFile s) 
+        && (not_sys_entry thePath) 
+        && (not_proc_entry thePath)  = File
+      | isDirectory s                = Directory
+      | otherwise                    = None
+
 
 
 -- | checks if path is part of /sys
@@ -124,7 +143,7 @@ check_file_entry name status =
     theGid     = fromIntegral $ fileGroup status
   in
    if (suid || sgid || worldWrite || groupWrite)
-      then Just $ FileEntry name theUid theGid theMode suid sgid worldWrite groupWrite
+      then Just (FileEntry name theUid theGid theMode suid sgid worldWrite groupWrite)
       else Nothing
       
 

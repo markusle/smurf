@@ -1,6 +1,6 @@
 GHC_FLAGS_DEVEL = -Wall -fwarn-tabs -fwarn-incomplete-record-updates -fwarn-monomorphism-restriction -fwarn-implicit-prelude -fno-warn-orphans
-GHC_FLAGS_RELEASE = -O2
-GHC = /home/markus/local/haskell/bin/ghc
+GHC_FLAGS_RELEASE = -O3 
+GHC = /home/markus/local/bin/ghc
 #GHC = /usr/bin/ghc
 
 all:
