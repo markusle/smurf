@@ -7,3 +7,6 @@ build:
 devel:
 	dmd -w -wi smurf.d
 
+
+shared:
+	dmd -O -shared -fPIC smurf.d
