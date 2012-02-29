@@ -10,10 +10,14 @@
 import std.array;
 import std.stdio;
 import std.file;
+import std.format : formattedWrite;
+import std.datetime;
 import std.conv : to;
 import std.string : toStringz;
 import std.exception;
 import posix = std.c.linux.linux;
+
+import time_string : time_to_string;
 
 /* stuff for parsing /etc/group */
 public import core.sys.posix.sys.types;
@@ -35,7 +39,6 @@ void main() {
 
   DirEntry[][string] vulLists = check_for_vulnerable_files(root);
   print_vulnerable_files(vulLists);
- 
 }
 
 
@@ -106,9 +109,13 @@ void pretty_print_file_info(DirEntry fileInfo) {
     groupName = to!(string)(gidEntry.gr_name);
   }
 
+  /* generate time string */
+  string timeString = time_to_string("%m/%d/%y %H:%M:%S", 
+                                     fileInfo.timeLastAccessed);
+
   writefln("%s%s%s%s%s%s%s%s%s%s %s %s  %s  %s", type, own_r, own_w, own_x, 
            grp_r, grp_w, grp_x, oth_r, oth_w, oth_x, userName, groupName, 
-           fileInfo.timeLastAccessed, fileInfo.name);
+           timeString, fileInfo.name);
 }
 
 

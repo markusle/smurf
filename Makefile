@@ -1,7 +1,8 @@
 # sime makefile
 
 build:
-	dmd -w -inline -O smurf.d
+	dmd -w -inline -c -O time_string.d
+	dmd -w -inline -O smurf.d time_string.o
 
 
 devel:
