@@ -6,13 +6,15 @@
  *
  ********************************************************************/
 
-module time_string;
+module helpers;
 
 import std.array : appender, split, join;
 import std.stdio;
 import std.format : formattedWrite;
 import std.datetime;
 import std.conv : to;
+
+
 
 /++
     Very simplistic strftime ripoff based on SysTime. Currently, the

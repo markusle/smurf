@@ -1,9 +1,16 @@
 # sime makefile
 
-build:
-	dmd -w -release -inline -c -O time_string.d
-	dmd -w -release -inline -O smurf.d time_string.o
+SOURCES=smurf.d permissions.d helpers.d
+OBJECTS=$(SOURCES:.d=.o)
+EXECUTABLE=smurf
 
+all: $(SOURCES) $(EXECUTABLE)
+
+$(EXECUTABLE): $(OBJECTS) 
+	dmd $(OBJECTS)
+
+%.o: %.d
+	dmd -w -release -inline -c -O $<
 
 devel:
 	dmd -w -wi smurf.d
