@@ -8,7 +8,7 @@
 
 module time_string;
 
-import std.array;
+import std.array : appender, split, join;
 import std.stdio;
 import std.format : formattedWrite;
 import std.datetime;
@@ -18,7 +18,6 @@ import std.conv : to;
     Very simplistic strftime ripoff based on SysTime. Currently, the
     following format specifiers are supported:
 
-    
     %d The day of the month as a decimal number (range 01 to 31).
     %H The hour as a decimal number using a 24-hour clock (range 00 to 23).
     %I The hour as a decimal number using a 12-hour clock (range 01 to 12).

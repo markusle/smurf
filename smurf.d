@@ -6,7 +6,6 @@
  *
  ********************************************************************/
 
-
 import std.array;
 import std.stdio;
 import std.file;
@@ -33,7 +32,6 @@ extern (C) group* getgrgid(gid_t);
 
 
 immutable root = "/"; 
-
 
 void main() {
 
@@ -79,14 +77,14 @@ void pretty_print_file_info(DirEntry fileInfo) {
 
   /* extract file attributes */
   char type = (attr & posix.S_IFDIR) ? 'd' : '-';    // we kept only files and dirs
-  char own_r = (attr & posix.S_ISUID) ? 's' : 
-               ((attr & posix.S_IRUSR) ? 'r' : '-');
+  char own_r = (attr & posix.S_IRUSR) ? 'r' : '-';
   char own_w = (attr & posix.S_IWUSR) ? 'w' : '-';
-  char own_x = (attr & posix.S_IXUSR) ? 'x' : '-';
-  char grp_r = (attr & posix.S_ISGID) ? 's' : 
-               ((attr & posix.S_IRGRP) ? 'r' : '-');
+  char own_x = (attr & posix.S_ISUID) ? 's' : 
+               ((attr & posix.S_IXUSR) ? 'x' : '-');
+  char grp_r = (attr & posix.S_IRGRP) ? 'r' : '-';
   char grp_w = (attr & posix.S_IWGRP) ? 'w' : '-';
-  char grp_x = (attr & posix.S_IXGRP) ? 'x' : '-';
+  char grp_x = (attr & posix.S_ISGID) ? 's' : 
+               ((attr & posix.S_IXGRP) ? 'x' : '-');
   char oth_r = (attr & posix.S_IROTH) ? 'r' : '-';
   char oth_w = (attr & posix.S_IWOTH) ? 'w' : '-';
   char oth_x = (attr & posix.S_ISVTX) ? 't' : 
@@ -161,7 +159,7 @@ DirEntry[][string] check_for_vulnerable_files(in string root) {
     // check if we can access it
     try {
       dirIter = dirEntries(dirName, SpanMode.shallow, true);
-    } catch (Exception ex) {
+    } catch (FileException ex) {
       continue;
     }
 
