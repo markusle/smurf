@@ -105,4 +105,37 @@ string time_to_string(in string format, in SysTime time) {
 }
 
 
+/++
+    prints out usage information
+ +/
+
+void usage() {
+
+  writeln("usage: ./smurf [options]");
+  writeln();
+  writeln("-p, --permission_scan");
+  writeln("\tscans the filesystem for suid and guid binaries as well");
+  writeln("\tas group and world writable files. The root of the scan");
+  writeln("\tcan be set with the -r flag.");
+  writeln();
+  writeln("-r, --scan_root");
+  writeln("\tsets the root of any filesystem scan, e.g. requested via -p.");
+  writeln("\tThe default is to start at '/'.");
+  writeln();
+  writeln("-e, --exclude_paths");
+  writeln("\tPaths in this list are excluded in any filesystem scans");
+  writeln("\tand should be given as a colon separated list, i.e.");
+  writeln("\t\"path1:path2:path3\"");
+  writeln();
+  writeln("-h, --help");
+  writeln("\tShows this list of available options.");
+  writeln();
+  writeln("-v, --version");
+  writeln("\tShow version information");
+  writeln();
+}
+
+
+
+
 

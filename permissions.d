@@ -8,7 +8,8 @@
 
 module permissions;
 
-import std.array;
+import std.array: split, join, back, popBack;
+import std.algorithm: find;
 import std.stdio;
 import std.file;
 import std.format : formattedWrite;
@@ -39,9 +40,16 @@ extern (C) group* getgrgid(gid_t);
     this function checks for vulnerable files (files that 
     are suid, sgid, groupWritable, worldWritable)
  +/
-DirEntry[][string] check_for_vulnerable_files(in string root) {
+DirEntry[][string] check_for_vulnerable_files(in string root,
+    in string excludedDirString) {
 
   string[] dirs = [root];
+
+  string[] excludedDirs = split(excludedDirString,":");
+  if (has_path(excludedDirs, root)) {
+    dirs = [];
+  }
+
   DirEntry[] suid;
   DirEntry[] sgid;
   DirEntry[] groupWritable;
@@ -63,6 +71,7 @@ DirEntry[][string] check_for_vulnerable_files(in string root) {
 
     // read content
     foreach(DirEntry e; dirIter) {
+
 
       try {
         uint attr = e.linkAttributes;
@@ -87,7 +96,8 @@ DirEntry[][string] check_for_vulnerable_files(in string root) {
           }
         } else if (attrIsDir(attr)) {
           string name = e.name;
-          if (name == "/proc" || name == "/sys") {
+          if (name == "/proc" || name == "/sys" 
+              || has_path(excludedDirs, name)) {
             continue;
           }
           dirs ~= name;
@@ -204,5 +214,19 @@ string[uint] get_password_map(in string filename) {
   return pwMap;
 }
 
+
+/++
+    checks if string needs is contained in paths.
+ +/
+pure bool has_path(string paths[], string needle) {
+  
+  foreach(path; paths) {
+    if (path == needle) {
+      return true;
+    }
+  }
+
+  return false;
+}
 
 
