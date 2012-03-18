@@ -35,26 +35,68 @@ struct group {
 extern (C) group* getgrgid(gid_t);
 
 
+/++
+    this handler collects all files that are either
+    suid, sgid, groupWritable, or worldWritable)
+ +/
+void handle_permissions(ref DirEntry[][string] tracker, DirEntry e, 
+                        uint attr) {
+
+  if (attr & posix.S_ISUID) {
+    tracker["suid"] ~= e;
+  } 
+    
+  if (attr & posix.S_ISGID) {
+    tracker["sgid"] ~= e;
+  } 
+          
+  if (attr & posix.S_IWGRP) {
+    tracker["groupWritable"] ~= e;
+  } 
+          
+  if (attr & posix.S_IWOTH) {
+    tracker["worldWritable"] ~= e;
+  }
+}
+
+
 
 /++
-    this function checks for vulnerable files (files that 
-    are suid, sgid, groupWritable, worldWritable)
+    this handler collects all files that are executable
  +/
-DirEntry[][string] check_for_vulnerable_files(in string root,
-    in string excludedDirString) {
+void handle_executables(ref DirEntry[][string] tracker, DirEntry e, 
+                       uint attr) {
 
-  string[] dirs = [root];
+  if (attr & posix.S_IXUSR || attr & posix.S_IXGRP 
+      || attr & posix.S_IXOTH ) { 
+    tracker["exec"] ~= e;
+  } 
+}
+
+
+
+/++
+    this function walks the filesystem starting at root and
+    applies handler to each file. handler fills an associative
+    array with arrays of DirEntries corresponding to certain
+    properties.
+ +/
+DirEntry[][string] check_files(in string rootDirs,
+    in string excludedDirString, 
+    void function(ref DirEntry[][string], DirEntry, uint) handler) {
+
+  /* split root path */
+  string[] primaryDirs = split(rootDirs,":");
 
   string[] excludedDirs = split(excludedDirString,":");
-  if (has_path(excludedDirs, root)) {
-    dirs = [];
+  string[] dirs;
+  foreach (dir; primaryDirs) {
+    if (!has_path(excludedDirs, dir)) {
+      dirs ~= dir;
+    }
   }
 
-  DirEntry[] suid;
-  DirEntry[] sgid;
-  DirEntry[] groupWritable;
-  DirEntry[] worldWritable;
-
+  DirEntry[][string] entryMap;
   DirIterator dirIter;
   while (dirs.length) {
 
@@ -72,28 +114,14 @@ DirEntry[][string] check_for_vulnerable_files(in string root,
     // read content
     foreach(DirEntry e; dirIter) {
 
-
       try {
         uint attr = e.linkAttributes;
         if (attrIsSymlink(attr)) {
           continue;
-        } else if (attrIsFile(attr)) {
 
-          if (attr & posix.S_ISUID) {
-            suid ~= e;
-          } 
-          
-          if (attr & posix.S_ISGID) {
-            sgid ~= e;
-          } 
-          
-          if (attr & posix.S_IWGRP) {
-            groupWritable ~= e;
-          } 
-          
-          if (attr & posix.S_IWOTH) {
-            worldWritable ~= e;
-          }
+        } else if (attrIsFile(attr)) {
+          handler(entryMap, e, attr);
+
         } else if (attrIsDir(attr)) {
           string name = e.name;
           if (name == "/proc" || name == "/sys" 
@@ -108,11 +136,6 @@ DirEntry[][string] check_for_vulnerable_files(in string root,
     }
   }
 
-  // collect results in a map
-  DirEntry[][string] entryMap = [ "suid" : suid,
-                                  "sgid" : sgid,
-                                  "groupWritable" : groupWritable,
-                                  "worldWritable" : worldWritable];
   return entryMap; 
 }
 
@@ -123,27 +146,49 @@ DirEntry[][string] check_for_vulnerable_files(in string root,
  +/
 void print_vulnerable_files(in DirEntry[][string] info) {
 
-  
-  writeln("\n************** file with suid *********************");
-  foreach (item; info["suid"]) {
-    pretty_print_file_info(item);
+  writeln("\n************** files with suid *********************");
+  if ("suid" in info) {
+    foreach (item; info["suid"]) {
+      pretty_print_file_info(item);
+    }
   }
 
   writeln("\n************** files with sgid ********************");
-  foreach (item; info["sgid"]) {
-    pretty_print_file_info(item);
+  if ("sgid" in info) {
+    foreach (item; info["sgid"]) {
+      pretty_print_file_info(item);
+    }
   }
 
   writeln("\n************** group writable files ***************");
-  foreach (item; info["groupWritable"]) {
-    pretty_print_file_info(item);
+  if ("groupWritable" in info) {
+    foreach (item; info["groupWritable"]) {
+      pretty_print_file_info(item);
+    }
   }
 
   writeln("\n************** world writable files ***************");
-  foreach (item; info["worldWritable"]) {
-    pretty_print_file_info(item);
+  if ("worldWritable" in info) {
+    foreach (item; info["worldWritable"]) {
+      pretty_print_file_info(item);
+    }
   }
 }
+
+
+/++ 
+    pretty printer for outputting executable file info
+ +/
+void print_executable_files(in DirEntry[][string] info) {
+
+  writeln("\n************** executable files *********************");
+  if ("exec" in info) {
+    foreach (item; info["exec"]) {
+      pretty_print_file_info(item);
+    }
+  }
+}
+
 
 
 /++

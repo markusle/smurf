@@ -1,12 +1,12 @@
 # sime makefile
 
-SOURCES=smurf.d permissions.d helpers.d
+SOURCES=smurf.d scanner.d helpers.d
 OBJECTS=$(SOURCES:.d=.o)
 EXECUTABLE=smurf
 
 all: $(SOURCES) $(EXECUTABLE)
 
-$(EXECUTABLE): $(OBJECTS) 
+$(EXECUTABLE): $(OBJECTS) $(SOURCES)
 	dmd $(OBJECTS)
 
 %.o: %.d
